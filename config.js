@@ -1,6 +1,7 @@
+// Hardcoded contract address — update after deploy.
 // Edit address to point this front end at an existing deployment.
 window.APP_CONFIG = {
-  "address": "",
+  "address": "0xA60D82CaB3b70770C5C852Bc71D8D8f6E64e7d1a",
   "slug": "autogrow",
   "name": "AutoGrow",
   "accent": "#5c8a12",

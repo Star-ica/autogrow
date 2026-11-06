@@ -8,7 +8,7 @@ interface IERC20 {
     function approve(address spender, uint256 amount) external returns (bool);
 }
 
-/// @notice Test token for BOT Chain testnet. Anyone can call faucet(). Do not use on mainnet.
+/// @notice Test token for BOT Chain Mainnet. Anyone can call faucet(). Do not use on mainnet.
 contract TestToken {
     string public name;
     string public symbol;

@@ -1,9 +1,9 @@
 (function () {
   "use strict";
   var ethers = window.ethers, C = window.APP_CONFIG, A = window.ARTIFACTS;
-  // BOT Chain testnet. The native currency symbol is an assumption: edit it if the chain docs say otherwise.
-  var CHAIN = { id: 968, hex: "0x3c8", name: "BOT Chain Testnet", rpc: "https://rpc.bohr.life", explorer: "https://scan.botchain.ai", currency: { name: "BOT", symbol: "BOT", decimals: 18 } };
-  var KEY = "botchain968:" + C.slug;
+  // BOT Chain Mainnet. The native currency symbol is an assumption: edit it if the chain docs say otherwise.
+  var CHAIN = { id: 677, hex: "0x2a5", name: "BOT Chain Mainnet", rpc: "https://rpc.botchain.ai", explorer: "https://scan.botchain.ai", currency: { name: "BOT", symbol: "BOT", decimals: 18 } };
+  var KEY = "botchain677:" + C.slug;
   var $ = function (s) { return document.querySelector(s); };
   var account = null, signer = null, mainAddr = "";
   try { mainAddr = localStorage.getItem(KEY) || ""; } catch (e) {}
@@ -65,34 +65,66 @@
   var errText = function (e) { return (e && (e.shortMessage || e.reason || (e.info && e.info.error && e.info.error.message) || e.message)) || String(e); };
 
   // ---------- wallet ----------
-  async function switchChain() {
-    try { await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CHAIN.hex }] }); }
-    catch (e) {
-      if (e && (e.code === 4902 || e.code === -32603 || /unrecognized|not been added/i.test(e.message || ""))) {
-        await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{ chainId: CHAIN.hex, chainName: CHAIN.name, nativeCurrency: CHAIN.currency, rpcUrls: [CHAIN.rpc], blockExplorerUrls: [CHAIN.explorer] }] });
-      } else throw e;
+  // ---------- wallet ----------
+async function switchChain(quiet) {
+  try {
+    await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CHAIN.hex }] });
+  } catch (e) {
+    if (e && (e.code === 4902 || e.code === -32603 || /unrecognized|not been added/i.test(e.message || ""))) {
+      try {
+        await window.ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [{ chainId: CHAIN.hex, chainName: CHAIN.name, nativeCurrency: CHAIN.currency, rpcUrls: [CHAIN.rpc], blockExplorerUrls: [CHAIN.explorer] }]
+        });
+      } catch (e2) {
+        if (!quiet) throw e2;
+      }
+    } else if (e && e.code === 4001) {
+      // User rejected — only surface this on manual connect
+      if (!quiet) throw e;
+    } else {
+      if (!quiet) throw e;
     }
   }
-  async function connect() {
-    if (!window.ethereum) throw new Error("No wallet found. Install MetaMask or another EVM wallet, then reload.");
-    await window.ethereum.request({ method: "eth_requestAccounts" });
-    await switchChain();
-    signer = await new ethers.BrowserProvider(window.ethereum).getSigner();
+}
+
+async function connect(quiet) {
+  if (!window.ethereum) {
+    if (!quiet) throw new Error("No wallet found. Install MetaMask or another EVM wallet, then reload.");
+    return;
+  }
+  try {
+    // eth_accounts = silent (no popup), eth_requestAccounts = popup
+    var accounts = await window.ethereum.request({
+      method: quiet ? "eth_accounts" : "eth_requestAccounts"
+    });
+    if (!accounts || !accounts.length) return; // not approved yet — stop silently
+
+    await switchChain(quiet); // always attempt chain switch; suppress errors when quiet
+
+    signer  = await new ethers.BrowserProvider(window.ethereum).getSigner();
     account = await signer.getAddress();
     await refreshBadge();
     await refreshAll();
+  } catch (e) {
+    if (!quiet) throw e; // let the caller's .catch() handle it for manual connect
   }
-  async function ensureWallet() {
-    if (!signer) await connect();
-    var id = await window.ethereum.request({ method: "eth_chainId" });
-    if (parseInt(id, 16) !== CHAIN.id) { await switchChain(); signer = await new ethers.BrowserProvider(window.ethereum).getSigner(); }
+}
+
+async function ensureWallet() {
+  if (!signer) await connect(false); // manual context — throws on failure
+  var id = await window.ethereum.request({ method: "eth_chainId" });
+  if (parseInt(id, 16) !== CHAIN.id) {
+    await switchChain(false);
+    signer = await new ethers.BrowserProvider(window.ethereum).getSigner();
   }
+}
   async function refreshBadge() {
     var b = $("#netBadge"), btn = $("#connectBtn");
     if (!account) { b.textContent = "Not connected"; b.className = "badge"; btn.textContent = "Connect wallet"; return; }
     var id = parseInt(await window.ethereum.request({ method: "eth_chainId" }), 16);
     btn.textContent = short(account);
-    if (id === CHAIN.id) { b.textContent = CHAIN.name + " (968)"; b.className = "badge ok"; }
+    if (id === CHAIN.id) { b.textContent = CHAIN.name + " (677)"; b.className = "badge ok"; }
     else { b.textContent = "Wrong network (" + id + ")"; b.className = "badge bad"; }
   }
   function runner() { return signer || readProvider; }
@@ -167,6 +199,13 @@
         ev.preventDefault(); btn.disabled = true;
         try {
           var args = (a.inputs || []).map(function (i) { return parse(i, form); });
+          
+          // IF PAYABLE: Strip the argument and attach it as msg.value instead
+          if (a.payable) {
+            var amountToSend = args[0];
+            args = [{ value: amountToSend }]; 
+          }
+
           if (!mainAddr) throw new Error("Deploy or enter the contract address first");
           await send(a.title, function () { return mainC()[a.fn].apply(null, args); });
         } catch (e) { toast(errText(e), { err: true }); }
@@ -232,18 +271,14 @@
     }
   }
   async function refreshAll() {
-    $("#addrInput").value = mainAddr;
-    $("#contractLink").innerHTML = "";
-    if (mainAddr) $("#contractLink").appendChild(addrLink(mainAddr)); else $("#contractLink").textContent = "not yet";
     if (mainAddr) {
-      try { if ((await readProvider.getCode(mainAddr)) === "0x") toast("No contract found at that address on BOT Chain testnet.", { err: true }); } catch (e) {}
+      try { if ((await readProvider.getCode(mainAddr)) === "0x") toast("No contract found at that address on BOT Chain Mainnet.", { err: true }); } catch (e) {}
     }
     await Promise.all([renderStats(), renderTokens()]);
   }
 
   // ---------- deploy ----------
   async function deployAll() {
-    var btn = $("#deployBtn"); btn.disabled = true;
     try {
       await ensureWallet();
       var addrs = [], d = C.deploy;
@@ -261,27 +296,26 @@
       toast(C.name + " deployed at " + short(mainAddr) + " ✓");
       await refreshAll();
     } catch (e) { toast("Deploy failed: " + errText(e), { err: true }); }
-    btn.disabled = false;
   }
 
   // ---------- boot ----------
-  document.title = C.name + " · BOT Chain Testnet";
-  document.documentElement.style.setProperty("--accent", C.accent);
-  $("#appName").textContent = C.name; $("#tagline").textContent = C.tagline; $("#aboutText").textContent = C.about || "";
-  $("#connectBtn").addEventListener("click", function () { connect().catch(function (e) { toast(errText(e), { err: true }); }); });
-  $("#deployBtn").addEventListener("click", deployAll);
-  $("#saveBtn").addEventListener("click", function () {
-    var v = $("#addrInput").value.trim();
-    if (!ethers.isAddress(v)) return toast("Enter a valid contract address.", { err: true });
-    mainAddr = v; try { localStorage.setItem(KEY, v); } catch (e) {}
-    refreshAll();
-  });
-  if (window.ethereum) {
-    if (window.ethereum.on) {
-      window.ethereum.on("accountsChanged", function () { signer = null; account = null; refreshBadge(); refreshAll(); });
-      window.ethereum.on("chainChanged", function () { window.location.reload(); });
-    }
-    window.ethereum.request({ method: "eth_accounts" }).then(function (a) { if (a && a.length) connect().catch(function () {}); }).catch(function () {});
+document.title = C.name + " · BOT Chain Mainnet";
+document.documentElement.style.setProperty("--accent", C.accent);
+$("#appName").textContent = C.name; $("#tagline").textContent = C.tagline;
+
+// Manual connect button
+$("#connectBtn").addEventListener("click", function () {
+  connect(false).catch(function (e) { toast(errText(e), { err: true }); });
+});
+
+if (window.ethereum) {
+  if (window.ethereum.on) {
+    window.ethereum.on("accountsChanged", function () { signer = null; account = null; refreshBadge(); refreshAll(); });
+    window.ethereum.on("chainChanged", function () { window.location.reload(); });
   }
-  renderActions(); renderViews(); refreshAll();
+  // Silent auto-connect on load — no popup, no error toast
+  connect(true).catch(function () {});
+}
+
+renderActions(); renderViews(); refreshAll();
 })();

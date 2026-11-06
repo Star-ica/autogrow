@@ -1,46 +1,489 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en" class="dark">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AutoGrow · BOT Chain Testnet</title>
-<meta name="description" content="A vault that compounds yield into its share price.">
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoGrow · Auto-Compounding BOT Vault</title>
+  <meta name="description" content="A vault on BOT Chain mainnet that compounds yield on native BOT directly into its share price.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: {
+        fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'], mono: ['"JetBrains Mono"', 'monospace'] },
+        colors: {
+          brand: { 50:'#f0fdf4',100:'#dcfce7',300:'#86efac',400:'#4ade80',500:'#22c55e',600:'#16a34a',700:'#15803d',900:'#14532d' },
+          dark: { bg:'#090d0a', card:'#111712', cardBorder:'#1e291e', hover:'#182219', input:'#0d130e' }
+        }
+      } }
+    }
+  </script>
+
+  <style>
+    body { background-color:#090d0a; color:#e2e8f0; font-family:'Plus Jakarta Sans',sans-serif; }
+    .glass-card { background:rgba(17,23,18,.75); backdrop-filter:blur(12px); border:1px solid rgba(34,197,94,.12); }
+    .glass-card:hover { border-color:rgba(34,197,94,.25); }
+    .glow-effect { box-shadow:0 0 25px -5px rgba(34,197,94,.15); }
+    .glow-button { box-shadow:0 0 15px 0 rgba(34,197,94,.35); }
+    .glow-button:hover { box-shadow:0 0 25px 2px rgba(34,197,94,.55); }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    ::-webkit-scrollbar { width:6px; } ::-webkit-scrollbar-track { background:#090d0a; } ::-webkit-scrollbar-thumb { background:#1e291e; border-radius:3px; }
+  </style>
 </head>
-<body>
-<header class="top">
-  <div class="brand"><h1 id="appName">AutoGrow</h1><p id="tagline">A vault that compounds yield into its share price.</p></div>
-  <div class="wallet"><span id="netBadge" class="badge">Not connected</span><button id="connectBtn" class="btn primary" type="button">Connect wallet</button></div>
-</header>
-<main>
-  <section class="card" aria-labelledby="setupH">
-    <h2 id="setupH">Contract</h2>
-    <p class="desc" id="aboutText"></p>
-    <div class="row">
-      <label>Contract address on BOT Chain testnet<input id="addrInput" class="mono" placeholder="0x… (or deploy a fresh copy)" autocomplete="off"></label>
-      <button id="saveBtn" class="btn" type="button">Use this address</button>
-      <button id="deployBtn" class="btn primary" type="button">Deploy new copy</button>
+<body class="min-h-screen flex flex-col justify-between selection:bg-brand-500 selection:text-black">
+
+  <div class="fixed top-0 left-1/4 w-96 h-96 bg-brand-500/10 rounded-full blur-[128px] pointer-events-none"></div>
+  <div class="fixed bottom-0 right-1/4 w-96 h-96 bg-emerald-600/10 rounded-full blur-[128px] pointer-events-none"></div>
+
+  <header class="sticky top-0 z-40 w-full border-b border-dark-cardBorder/60 bg-dark-bg/80 backdrop-blur-md px-4 lg:px-8 py-4">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3 cursor-pointer" onclick="showSection('landing')">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-brand-400 flex items-center justify-center font-bold text-black text-xl shadow-lg shadow-brand-500/20">↗</div>
+        <div>
+          <h1 class="font-extrabold text-lg text-white tracking-tight flex items-center gap-2">
+            AutoGrow <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-brand-500/10 text-brand-400 border border-brand-500/20">Vault</span>
+          </h1>
+          <p class="text-xs text-gray-400 hidden sm:block">Auto-compounding native BOT vault</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <nav class="hidden md:flex items-center gap-1 bg-dark-card p-1 rounded-lg border border-dark-cardBorder">
+          <button onclick="showSection('landing')" id="nav-landing" class="px-4 py-1.5 text-xs font-semibold rounded-md transition-all text-gray-300 hover:text-white">Overview</button>
+          <button onclick="showSection('app')" id="nav-app" class="px-4 py-1.5 text-xs font-semibold rounded-md transition-all bg-brand-500/10 text-brand-400 border border-brand-500/20">Vault App</button>
+        </nav>
+        <span id="netBadge" class="hidden sm:inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-dark-card border border-dark-cardBorder text-gray-400 font-mono">
+          <span class="w-2 h-2 rounded-full bg-yellow-500"></span> Not connected
+        </span>
+        <button id="connectBtn" class="glow-button bg-brand-500 hover:bg-brand-400 text-black font-bold text-xs sm:text-sm px-4 sm:px-5 py-2 rounded-xl transition-all">Connect Wallet</button>
+      </div>
     </div>
-    <p class="desc" style="margin:10px 0 0">Deployed: <span id="contractLink">not yet</span></p>
-  </section>
-  <section class="card" id="tokens"></section>
-  <section class="stats" id="stats" aria-label="Live numbers"></section>
-  <p class="sec">Actions</p>
-  <section class="grid" id="actions"></section>
-  <p class="sec">Lookups</p>
-  <section class="grid" id="views"></section>
-</main>
-<div class="status" id="status" role="status" aria-live="polite"></div>
-<footer class="foot">
-  <span>BOT Chain Testnet · Chain ID 968 · RPC rpc.bohr.life</span>
-  <nav aria-label="BOT Chain links">
-    <a class="btn" href="https://botchain.ai" target="_blank" rel="noopener">Botchain</a>
-    <a class="btn" href="https://scan.botchain.ai" target="_blank" rel="noopener">Explorer</a>
-  </nav>
-</footer>
-<script src="lib/ethers.umd.min.js"></script>
-<script src="config.js"></script>
-<script src="artifacts.js"></script>
-<script src="app.js"></script>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 z-10">
+
+    <!-- LANDING -->
+    <section id="landing-section" class="space-y-16 py-6">
+      <div class="text-center max-w-3xl mx-auto space-y-6">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-400 text-xs font-semibold">
+          <span class="flex h-2 w-2 relative">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-brand-500"></span>
+          </span>
+          Live on BOT Chain Mainnet (Chain ID 677)
+        </div>
+        <h2 class="text-4xl sm:text-6xl font-extrabold text-white tracking-tight leading-tight">
+          Compound Yield Directly Into Your <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-emerald-200">Share Price</span>
+        </h2>
+        <p class="text-gray-400 text-base sm:text-lg leading-relaxed">
+          Deposit BOT to mint vault shares. Yield accrues at a fixed APR from a funded reserve and is folded into the share price on every deposit, withdrawal or compound call.
+        </p>
+        <div class="flex flex-wrap items-center justify-center gap-4 pt-4">
+          <button onclick="showSection('app')" class="glow-button bg-brand-500 hover:bg-brand-400 text-black font-extrabold text-sm px-8 py-3.5 rounded-xl transition-all">Launch Vault App</button>
+          <a id="explorerLink" href="https://scan.botchain.ai" target="_blank" rel="noopener" class="glass-card hover:bg-dark-hover text-gray-300 hover:text-white font-semibold text-sm px-6 py-3.5 rounded-xl transition-all">View Contract ↗</a>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6">
+        <div class="glass-card p-6 rounded-2xl space-y-3">
+          <div class="w-10 h-10 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-xl">⚡</div>
+          <h3 class="text-lg font-bold text-white">Automated Compounding</h3>
+          <p class="text-xs text-gray-400 leading-relaxed">Yield folds into the share price on every interaction. No manual claims.</p>
+        </div>
+        <div class="glass-card p-6 rounded-2xl space-y-3">
+          <div class="w-10 h-10 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-xl">🛡️</div>
+          <h3 class="text-lg font-bold text-white">Transparent Reserve</h3>
+          <p class="text-xs text-gray-400 leading-relaxed">Yield is only paid from the on-chain reserve. Anyone can check it or top it up.</p>
+        </div>
+        <div class="glass-card p-6 rounded-2xl space-y-3">
+          <div class="w-10 h-10 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-xl">📈</div>
+          <h3 class="text-lg font-bold text-white">Fixed APR</h3>
+          <p class="text-xs text-gray-400 leading-relaxed">Predictable returns, capped by what the reserve holds.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- APP -->
+    <section id="app-section" class="space-y-8 hidden">
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-brand-500"></span> Live Vault Metrics
+          </h2>
+          <button onclick="refreshAll()" class="text-xs text-brand-400 hover:text-brand-300 font-mono">↻ Refresh</button>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4" id="stats"></div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div class="lg:col-span-7">
+          <div class="glass-card p-6 rounded-2xl glow-effect">
+            <div class="border-b border-dark-cardBorder pb-4 mb-6">
+              <h3 class="text-lg font-bold text-white">Vault Operations</h3>
+              <p class="text-xs text-gray-400">All amounts are in native BOT. Gas is paid in BOT.</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" id="actions"></div>
+          </div>
+        </div>
+
+        <div class="lg:col-span-5 space-y-6">
+          <div class="glass-card p-6 rounded-2xl">
+            <h3 class="text-sm font-bold text-white mb-2">Vault Contract</h3>
+            <div class="space-y-3 text-xs">
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-dark-input border border-dark-cardBorder">
+                <span class="text-gray-400">Address</span><span id="contractAddrDisplay" class="font-mono text-brand-400"></span>
+              </div>
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-dark-input border border-dark-cardBorder">
+                <span class="text-gray-400">Network</span><span class="font-mono text-gray-200">BOT Chain Mainnet (677)</span>
+              </div>
+            </div>
+          </div>
+          <div class="glass-card p-6 rounded-2xl" id="wallet"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="status" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none" role="status" aria-live="polite"></div>
+
+  <footer class="border-t border-dark-cardBorder/60 bg-dark-bg/80 py-6 px-4 sm:px-8 text-xs text-gray-500 z-10">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-brand-500"></span><span>BOT Chain Mainnet · Chain ID 677</span></div>
+      <nav class="flex items-center gap-6">
+        <a class="hover:text-gray-300" href="https://botchain.ai" target="_blank" rel="noopener">botchain.ai</a>
+        <a class="hover:text-gray-300" href="https://scan.botchain.ai" target="_blank" rel="noopener">BOTScan</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.11.1/ethers.umd.min.js"></script>
+
+  <script>
+    window.ARTIFACTS = {
+      main: {
+        abi: [
+          "constructor(uint256 _aprBps)",
+          "event Compounded(uint256 yieldAdded, uint256 totalAssets)",
+          "event Deposited(address indexed user, uint256 amount, uint256 shares)",
+          "event Funded(address indexed from, uint256 amount)",
+          "event Withdrawn(address indexed user, uint256 amount, uint256 shares)",
+          "function aprBps() view returns (uint256)",
+          "function assetsOf(address u) view returns (uint256)",
+          "function compound()",
+          "function deposit() payable",
+          "function fund() payable",
+          "function lastCompound() view returns (uint256)",
+          "function pendingYield() view returns (uint256)",
+          "function reserve() view returns (uint256)",
+          "function sharePrice() view returns (uint256)",
+          "function shares(address) view returns (uint256)",
+          "function totalAssets() view returns (uint256)",
+          "function totalShares() view returns (uint256)",
+          "function withdraw(uint256 s)"
+        ]
+      }
+    };
+
+    // PASTE YOUR MAINNET DEPLOYMENT ADDRESS HERE
+    window.APP_CONFIG = {
+      address: "0xA60D82CaB3b70770C5C852Bc71D8D8f6E64e7d1a",
+      name: "AutoGrow",
+      stats: [
+        { label: "Total Assets",  fn: "totalAssets",  fmt: "bot" },
+        { label: "Reserve Pool",  fn: "reserve",      fmt: "bot" },
+        { label: "Share Price",   fn: "sharePrice",   fmt: "ratio" },
+        { label: "Pending Yield", fn: "pendingYield", fmt: "bot" },
+        { label: "Fixed APR",     fn: "aprBps",       fmt: "bps" },
+        { label: "Total Shares",  fn: "totalShares",  fmt: "token" },
+        { label: "Your Shares",   fn: "shares",       fmt: "token", args: ["me"] },
+        { label: "Your Value",    fn: "assetsOf",     fmt: "bot",   args: ["me"] }
+      ],
+      actions: [
+        { title: "Deposit BOT", fn: "deposit", value: "amount", button: "Deposit",
+          desc: "Send BOT to mint yield-bearing shares",
+          inputs: [{ id: "amount", label: "Amount (BOT)", type: "amount", default: "1" }] },
+        { title: "Withdraw", fn: "withdraw", button: "Withdraw",
+          desc: "Burn shares for BOT plus accrued yield. Type max to withdraw everything.",
+          inputs: [{ id: "s", label: "Shares", type: "amount", default: "max", maxFn: "shares" }] },
+        { title: "Compound Yield", fn: "compound", button: "Compound Now",
+          desc: "Fold pending yield into the share price. Anyone can call it.", inputs: [] },
+        { title: "Fund Reserve", fn: "fund", value: "amount", button: "Fund Reserve",
+          desc: "Send BOT to the reserve that pays future yield",
+          inputs: [{ id: "amount", label: "Amount (BOT)", type: "amount", default: "1" }] }
+      ]
+    };
+  </script>
+
+  <script>
+    (function () {
+      "use strict";
+      var ethers = window.ethers, C = window.APP_CONFIG, A = window.ARTIFACTS;
+      var ZERO = "0x0000000000000000000000000000000000000000";
+
+      var CHAIN = {
+        id: 677, hex: "0x2a5", name: "BOT Chain Mainnet",
+        rpc: "https://rpc.botchain.ai", explorer: "https://scan.botchain.ai",
+        currency: { name: "BOT", symbol: "BOT", decimals: 18 }
+      };
+
+      var $ = function (s) { return document.querySelector(s); };
+      var account = null, signer = null, mainAddr = C.address;
+      var configured = ethers.isAddress(mainAddr) && mainAddr !== ZERO;
+      var readProvider = new ethers.JsonRpcProvider(CHAIN.rpc, CHAIN.id, { staticNetwork: ethers.Network.from(CHAIN.id) });
+
+      function h(tag, attrs) {
+        var n = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(function (k) {
+          if (k === "class") n.className = attrs[k];
+          else if (k === "text") n.textContent = attrs[k];
+          else if (k.slice(0, 2) === "on") n.addEventListener(k.slice(2), attrs[k]);
+          else n.setAttribute(k, attrs[k]);
+        });
+        for (var i = 2; i < arguments.length; i++) {
+          var c = arguments[i]; if (c == null) continue;
+          n.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+        }
+        return n;
+      }
+      var short = function (a) { return a ? a.slice(0, 6) + "…" + a.slice(-4) : ""; };
+
+      function units(v) {
+        var s = ethers.formatUnits(v, 18).split("."), d = (s[1] || "").slice(0, 4).replace(/0+$/, "");
+        return BigInt(s[0]).toLocaleString("en-US") + (d ? "." + d : "");
+      }
+      function fmt(kind, v) {
+        if (v === undefined || v === null) return "—";
+        switch (kind) {
+          case "token": return units(v);
+          case "bot": return units(v) + " BOT";
+          case "bps": return (Number(v) / 100) + "%";
+          case "ratio": return Number(ethers.formatUnits(v, 18)).toFixed(6);
+          default: return String(v);
+        }
+      }
+
+      window.showSection = function (sec) {
+        var on = "px-4 py-1.5 text-xs font-semibold rounded-md transition-all bg-brand-500/10 text-brand-400 border border-brand-500/20";
+        var off = "px-4 py-1.5 text-xs font-semibold rounded-md transition-all text-gray-400 hover:text-white";
+        $("#landing-section").classList.toggle("hidden", sec === "app");
+        $("#app-section").classList.toggle("hidden", sec !== "app");
+        $("#nav-app").className = sec === "app" ? on : off;
+        $("#nav-landing").className = sec === "app" ? off : on;
+      };
+
+      function toast(msg, opts) {
+        opts = opts || {};
+        var d = h("div", { class: "pointer-events-auto p-4 rounded-xl border backdrop-blur-md shadow-2xl flex items-center justify-between gap-3 text-xs font-semibold " +
+          (opts.err ? "bg-red-950/80 border-red-500/40 text-red-200" : "bg-dark-card/90 border-brand-500/30 text-white") }, msg);
+        if (opts.hash) d.appendChild(h("a", { href: CHAIN.explorer + "/tx/" + opts.hash, target: "_blank", rel: "noopener", class: "underline text-brand-400 font-mono ml-2", text: "view tx ↗" }));
+        var box = $("#status"); box.appendChild(d);
+        while (box.children.length > 4) box.removeChild(box.firstChild);
+        if (!opts.sticky) setTimeout(function () { d.remove(); }, opts.err ? 8000 : 5000);
+        return d;
+      }
+      var errText = function (e) { return (e && (e.shortMessage || e.reason || (e.info && e.info.error && e.info.error.message) || e.message)) || String(e); };
+
+      // ---------- wallet ----------
+      async function switchChain(quiet) {
+        try {
+          await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CHAIN.hex }] });
+        } catch (e) {
+          if (e && (e.code === 4902 || e.code === -32603 || /unrecognized|not been added/i.test(e.message || ""))) {
+            try {
+              await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{
+                chainId: CHAIN.hex, chainName: CHAIN.name, nativeCurrency: CHAIN.currency,
+                rpcUrls: [CHAIN.rpc], blockExplorerUrls: [CHAIN.explorer] }] });
+            } catch (e2) { if (!quiet) throw e2; }
+          } else if (!quiet) throw e;
+        }
+      }
+
+      async function connect(quiet) {
+        if (!window.ethereum) { if (!quiet) throw new Error("No wallet found. Install MetaMask or another EVM wallet."); return; }
+        try {
+          var accounts = await window.ethereum.request({ method: quiet ? "eth_accounts" : "eth_requestAccounts" });
+          if (!accounts || !accounts.length) return;
+          await switchChain(quiet);
+          signer = await new ethers.BrowserProvider(window.ethereum).getSigner();
+          account = await signer.getAddress();
+          await refreshBadge();
+          await refreshAll();
+        } catch (e) { if (!quiet) throw e; }
+      }
+
+      async function ensureWallet() {
+        if (!signer) await connect(false);
+        if (!signer) throw new Error("Wallet not connected");
+        var id = parseInt(await window.ethereum.request({ method: "eth_chainId" }), 16);
+        if (id !== CHAIN.id) {
+          await switchChain(false);
+          signer = await new ethers.BrowserProvider(window.ethereum).getSigner();
+        }
+      }
+
+      async function refreshBadge() {
+        var b = $("#netBadge"), btn = $("#connectBtn");
+        if (!account) {
+          b.innerHTML = '<span class="w-2 h-2 rounded-full bg-yellow-500"></span> Not connected';
+          btn.textContent = "Connect Wallet"; return;
+        }
+        var id = parseInt(await window.ethereum.request({ method: "eth_chainId" }), 16);
+        btn.textContent = short(account);
+        b.innerHTML = id === CHAIN.id
+          ? '<span class="w-2 h-2 rounded-full bg-brand-500"></span> BOT Chain (677)'
+          : '<span class="w-2 h-2 rounded-full bg-red-500"></span> Wrong network (' + id + ')';
+      }
+
+      function mainC(withSigner) { return new ethers.Contract(mainAddr, A.main.abi, withSigner ? signer : readProvider); }
+
+            var busy = false;
+      async function send(label, fn, args, value) {
+        if (busy) throw new Error("Finish the pending transaction first");
+        busy = true;
+        await ensureWallet().catch(function (e) { busy = false; throw e; });
+        var t = toast(label + ": confirm in wallet…", { sticky: true }), p = null;
+        try {
+          value = value || 0n;
+          var data = new ethers.Interface(A.main.abi).encodeFunctionData(fn, args);
+          // estimate on our own RPC so reverts surface here instead of hanging in MetaMask
+          var gas = await readProvider.estimateGas({ from: account, to: mainAddr, data: data, value: value });
+          var hash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{ from: account, to: mainAddr, data: data,
+                       value: ethers.toQuantity(value), gas: ethers.toQuantity(gas * 12n / 10n) }]
+          });
+          t.remove();
+          p = toast(label + ": pending…", { sticky: true, hash: hash });
+          var rcpt = await readProvider.waitForTransaction(hash, 1, 180000);
+          p.remove();
+          if (!rcpt || rcpt.status !== 1) throw new Error("reverted or not mined within 3 min");
+          toast(label + " confirmed ✓", { hash: hash });
+          await refreshAll();
+        } catch (e) {
+          t.remove(); if (p) p.remove();
+          toast(label + " failed: " + errText(e), { err: true });
+        } finally { busy = false; }
+      }
+      // ---------- inputs ----------
+      function field(inp) {
+        var ctl = h("input", {
+          id: "f_" + inp.id, autocomplete: "off", inputmode: "decimal", placeholder: "0.0",
+          value: inp.default != null ? inp.default : "",
+          class: "w-full bg-dark-input border border-dark-cardBorder text-white font-mono text-xs px-3 py-2 rounded-xl outline-none focus:border-brand-500"
+        });
+        return h("div", { class: "space-y-1" }, h("label", { class: "text-[11px] font-semibold text-gray-400 block" }, inp.label), ctl);
+      }
+
+      // returns a value or a promise (for "max")
+      function parse(inp, form) {
+        var v = (form.querySelector("#f_" + inp.id).value || "").trim();
+        if (v === "") throw new Error(inp.label + " is required");
+        if (inp.maxFn && v.toLowerCase() === "max") {
+          if (!account) throw new Error("Connect your wallet first");
+          return mainC().shares(account);
+        }
+        var n = ethers.parseUnits(v, 18);
+        if (n <= 0n) throw new Error(inp.label + " must be greater than 0");
+        return n;
+      }
+
+      // ---------- render ----------
+      function renderActions() {
+        var box = $("#actions"); box.innerHTML = "";
+        C.actions.forEach(function (a) {
+          var form = h("form", { class: "p-4 rounded-xl bg-dark-input border border-dark-cardBorder space-y-3" },
+            h("div", {}, h("h4", { class: "text-xs font-bold text-white" }, a.title),
+              a.desc ? h("p", { class: "text-[11px] text-gray-400 mt-0.5" }, a.desc) : null));
+          (a.inputs || []).forEach(function (i) { form.appendChild(field(i)); });
+          var btn = h("button", { type: "submit", text: a.button || a.title,
+            class: "w-full bg-brand-500 hover:bg-brand-400 text-black font-bold text-xs py-2 px-4 rounded-xl transition-all" });
+          form.appendChild(btn);
+
+          form.addEventListener("submit", async function (ev) {
+            ev.preventDefault(); btn.disabled = true;
+                        try {
+              if (!configured) throw new Error("Set APP_CONFIG.address to your mainnet vault address first.");
+              var vals = await Promise.all((a.inputs || []).map(function (i) { return parse(i, form); }));
+              var args = [], value = 0n;
+              (a.inputs || []).forEach(function (i, k) {
+                if (a.value === i.id) value = vals[k]; else args.push(vals[k]);
+              });
+              if (a.fn === "withdraw" && args[0] === 0n) throw new Error("You have no shares to withdraw");
+              await send(a.title, a.fn, args, value);
+            } catch (e) { toast(errText(e), { err: true }); }
+            btn.disabled = false;
+          });
+          box.appendChild(form);
+        });
+      }
+
+      async function renderStats() {
+        var box = $("#stats"); box.innerHTML = "";
+        if (!configured) {
+          box.innerHTML = '<div class="col-span-full p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-xs font-mono">Set APP_CONFIG.address to your deployed mainnet vault.</div>';
+          return;
+        }
+        var c = mainC();
+        await Promise.all(C.stats.map(async function (s) {
+          var val = h("b", { class: "font-mono text-base font-bold text-white block" }, "…");
+          box.appendChild(h("div", { class: "glass-card p-4 rounded-2xl space-y-1" },
+            h("span", { class: "text-[11px] font-semibold text-gray-400 block" }, s.label), val));
+          try {
+            if ((s.args || []).indexOf("me") > -1 && !account) { val.textContent = "Connect wallet"; val.className = "font-mono text-xs text-gray-500 block"; return; }
+            var res = await c[s.fn].apply(c, (s.args || []).map(function (x) { return x === "me" ? account : x; }));
+            val.textContent = fmt(s.fmt, res);
+            if (s.fmt === "bps" || s.fmt === "ratio") val.classList.add("text-brand-400");
+          } catch (e) { val.textContent = "—"; }
+        }));
+      }
+
+            async function renderWallet() {
+        var box = $("#wallet"), parts = [h("h3", { class: "text-sm font-bold text-white mb-2" }, "Your Wallet")];
+        if (!account) {
+          parts.push(h("p", { class: "text-xs text-gray-400" }, "Connect your wallet to see your BOT balance."));
+        } else {
+          try {
+            var bal = await readProvider.getBalance(account);
+            parts.push(h("div", { class: "flex items-center justify-between p-2.5 rounded-xl bg-dark-input border border-dark-cardBorder text-xs" },
+              h("span", { class: "text-gray-400" }, "BOT balance"),
+              h("span", { class: "font-mono text-white" }, units(bal) + " BOT")));
+            parts.push(h("p", { class: "text-[11px] text-gray-500 mt-2" }, "Keep some BOT for gas."));
+          } catch (e) { parts.push(h("p", { class: "text-xs text-red-400" }, "Balance read failed: " + errText(e))); }
+        }
+        box.replaceChildren.apply(box, parts);
+      }
+      window.refreshAll = async function () {
+        if (configured) {
+          try { if ((await readProvider.getCode(mainAddr)) === "0x") toast("No contract found at that address on BOT Chain mainnet.", { err: true }); } catch (e) {}
+        }
+        await Promise.all([renderStats(), renderWallet()]);
+      };
+
+      // ---------- boot ----------
+      var disp = $("#contractAddrDisplay");
+      if (configured) {
+        disp.appendChild(h("a", { href: CHAIN.explorer + "/address/" + mainAddr, target: "_blank", rel: "noopener", class: "hover:underline", text: short(mainAddr) }));
+        $("#explorerLink").href = CHAIN.explorer + "/address/" + mainAddr;
+      } else disp.textContent = "Not configured";
+
+      $("#connectBtn").addEventListener("click", function () {
+        connect(false).catch(function (e) { toast(errText(e), { err: true }); });
+      });
+
+      if (window.ethereum && window.ethereum.on) {
+        window.ethereum.on("accountsChanged", function () { signer = null; account = null; connect(true); refreshBadge(); refreshAll(); });
+        window.ethereum.on("chainChanged", function () { window.location.reload(); });
+      }
+      if (window.ethereum) connect(true).catch(function () {});
+
+      renderActions();
+      refreshAll();
+    })();
+  </script>
 </body>
 </html>
